@@ -1,0 +1,9 @@
+spring:
+  jpa:
+    show-sql: true
+  flyway:
+    enabled: true
+
+logging:
+  level:
+    com.bancoluso.payments: DEBUG
