@@ -59,14 +59,14 @@ List all payments:
 
     mvn test
 
-Tests use real Postgres and Kafka containers via Testcontainers — no mocks.
+Tests use real Postgres and Kafka containers via Testcontainers , no mocks.
 Docker must be running.
 
 ---
 
 ## Why I built it this way
 
-The brief mentioned 85,000 payments per business day. That's not steady load —
+The brief mentioned 85,000 payments per business day. That's not steady load ,
 it comes in bursts, mostly morning and end of day.
 
 A synchronous DB write on every POST would tie response time directly to DB
@@ -77,7 +77,7 @@ Nothing is lost.
 
 I picked Kafka over RabbitMQ specifically because of message retention. RabbitMQ
 drops messages the moment they're consumed. In a banking context you need to be
-able to replay events for auditing or debugging — that ruled RabbitMQ out early.
+able to replay events for auditing or debugging , that ruled RabbitMQ out early.
 
 The trade-off I'm not fully happy with: a client that POSTs and immediately GETs
 might get a 404 for a second while the consumer is still processing. The 202
@@ -99,7 +99,7 @@ The rules I landed on:
 
 Financial fields (amount, IBANs, currency) are immutable after first ingestion.
 Only status and eventTimestamp can ever change. I thought about allowing
-corrections but decided that's a separate flow — amendments should be explicit,
+corrections but decided that's a separate flow , amendments should be explicit,
 not silent overwrites.
 
 ### Kafka message key = referenceId
@@ -118,27 +118,27 @@ the default rather than something you remember to do later.
 
 ## What's missing and why it matters
 
-**Dead-letter queue** — right now a consumer failure just gets logged and the
+**Dead-letter queue** , right now a consumer failure just gets logged and the
 offset still moves. That means a bad event disappears silently. A DLQ topic or
 a payment_errors table would let failed events be inspected and replayed. This
 is the thing I'd add first.
 
-**Outbox pattern** — there's a small window between the HTTP layer accepting the
+**Outbox pattern** , there's a small window between the HTTP layer accepting the
 event and Kafka actually receiving it. If the producer fails in that window, the
 event is gone. A transactional outbox with Debezium CDC would close that gap
 properly. I didn't implement it here because it adds significant infrastructure
 complexity, but in a real bank I wouldn't ship without it.
 
-**Auth** — nothing is secured right now. The ingest endpoint needs mTLS or an
+**Auth** , nothing is secured right now. The ingest endpoint needs mTLS or an
 API key at minimum, the query endpoint should require a JWT. Skipped it to keep
 the challenge focused on the core problem.
 
-**Schema Registry** — JSON works but doesn't enforce contracts between producer
+**Schema Registry** , JSON works but doesn't enforce contracts between producer
 and consumer. A schema change on the producer can silently break the consumer.
 Avro or Protobuf with Confluent Schema Registry is the right move for anything
 beyond a single team.
 
-**Distributed tracing** — logs already include referenceId as an MDC field which
+**Distributed tracing** , logs already include referenceId as an MDC field which
 helps a lot when debugging. But a proper OpenTelemetry trace spanning HTTP, Kafka,
 and the consumer would make production incidents much faster to diagnose.
 
