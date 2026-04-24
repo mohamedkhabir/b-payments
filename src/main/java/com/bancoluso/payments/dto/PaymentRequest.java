@@ -29,6 +29,5 @@ public class PaymentRequest {
     private LocalDate valueDate;
     @NotNull(message = "status is required")
     private PaymentStatus status;
-    @NotNull(message = "eventTimestamp is required")
     private Instant eventTimestamp;
 }

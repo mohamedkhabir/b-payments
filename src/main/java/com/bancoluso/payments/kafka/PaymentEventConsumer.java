@@ -10,6 +10,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.Optional;
 
 @Component
@@ -25,8 +26,12 @@ public class PaymentEventConsumer {
     )
     @Transactional
     public void consume(PaymentRequest event) {
-        log.info("Received payment event: referenceId={} status={} timestamp={}", event.getReferenceId(), event.getStatus(), event.getEventTimestamp());
+        Instant eventTs = event.getEventTimestamp() != null
+                ? event.getEventTimestamp()
+                : Instant.now();
+        log.info("Received payment event: referenceId={} status={} timestamp={}", event.getReferenceId(), event.getStatus(), eventTs);
         Optional<Payment> existing = paymentRepository.findByReferenceIdForUpdate(event.getReferenceId());
+
         if (existing.isEmpty()) {
             Payment payment = Payment.builder()
                     .referenceId(event.getReferenceId())
@@ -37,7 +42,7 @@ public class PaymentEventConsumer {
                     .creditorIban(event.getCreditorIban())
                     .valueDate(event.getValueDate())
                     .status(event.getStatus())
-                    .eventTimestamp(event.getEventTimestamp())
+                    .eventTimestamp(eventTs)
                     .build();
             paymentRepository.save(payment);
             log.info("Inserted new payment: referenceId={} status={}", event.getReferenceId(), event.getStatus());
@@ -46,37 +51,37 @@ public class PaymentEventConsumer {
         Payment payment = existing.get();
 
         if (payment.getStatus() == event.getStatus()
-                && payment.getEventTimestamp().equals(event.getEventTimestamp())) {
+                && payment.getEventTimestamp().equals(eventTs)) {
 
             log.debug("True duplicate ignored: referenceId={} status={} timestamp={}",
-                    event.getReferenceId(), event.getStatus(), event.getEventTimestamp());
+                    event.getReferenceId(), event.getStatus(), eventTs);
             return;
         }
 
         if (payment.getStatus() == event.getStatus()
-                && event.getEventTimestamp().isAfter(payment.getEventTimestamp())) {
+                && eventTs.isAfter(payment.getEventTimestamp())) {
 
             log.info("Updating timestamp only (same status): referenceId={} timestamp {} -> {}",
-                    event.getReferenceId(), payment.getEventTimestamp(), event.getEventTimestamp());
+                    event.getReferenceId(), payment.getEventTimestamp(), eventTs);
 
-            payment.setEventTimestamp(event.getEventTimestamp());
+            payment.setEventTimestamp(eventTs);
             paymentRepository.save(payment);
             return;
         }
 
-        if (event.getEventTimestamp().isAfter(payment.getEventTimestamp())) {
+        if (eventTs.isAfter(payment.getEventTimestamp())) {
 
             log.info("Updating payment status: referenceId={} {} -> {}",
                     event.getReferenceId(), payment.getStatus(), event.getStatus());
 
             payment.setStatus(event.getStatus());
-            payment.setEventTimestamp(event.getEventTimestamp());
+            payment.setEventTimestamp(eventTs);
             paymentRepository.save(payment);
             return;
         }
 
         log.warn("Stale event ignored: referenceId={} incomingStatus={} incomingTimestamp={} currentTimestamp={}",
                 event.getReferenceId(), event.getStatus(),
-                event.getEventTimestamp(), payment.getEventTimestamp());
+                eventTs, payment.getEventTimestamp());
     }
 }
