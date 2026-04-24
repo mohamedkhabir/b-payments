@@ -44,20 +44,39 @@ public class PaymentEventConsumer {
             return;
         }
         Payment payment = existing.get();
-        if (payment.getStatus() == event.getStatus()) {
-            log.debug("Duplicate event ignored: referenceId={} status={}", event.getReferenceId(), event.getStatus());
+
+        if (payment.getStatus() == event.getStatus()
+                && payment.getEventTimestamp().equals(event.getEventTimestamp())) {
+
+            log.debug("True duplicate ignored: referenceId={} status={} timestamp={}",
+                    event.getReferenceId(), event.getStatus(), event.getEventTimestamp());
             return;
         }
+
+        if (payment.getStatus() == event.getStatus()
+                && event.getEventTimestamp().isAfter(payment.getEventTimestamp())) {
+
+            log.info("Updating timestamp only (same status): referenceId={} timestamp {} -> {}",
+                    event.getReferenceId(), payment.getEventTimestamp(), event.getEventTimestamp());
+
+            payment.setEventTimestamp(event.getEventTimestamp());
+            paymentRepository.save(payment);
+            return;
+        }
+
         if (event.getEventTimestamp().isAfter(payment.getEventTimestamp())) {
+
             log.info("Updating payment status: referenceId={} {} -> {}",
                     event.getReferenceId(), payment.getStatus(), event.getStatus());
+
             payment.setStatus(event.getStatus());
             payment.setEventTimestamp(event.getEventTimestamp());
             paymentRepository.save(payment);
-        } else {
-            log.warn("Stale event ignored: referenceId={} incomingStatus={} incomingTimestamp={} currentTimestamp={}",
-                    event.getReferenceId(), event.getStatus(),
-                    event.getEventTimestamp(), payment.getEventTimestamp());
+            return;
         }
+
+        log.warn("Stale event ignored: referenceId={} incomingStatus={} incomingTimestamp={} currentTimestamp={}",
+                event.getReferenceId(), event.getStatus(),
+                event.getEventTimestamp(), payment.getEventTimestamp());
     }
 }
